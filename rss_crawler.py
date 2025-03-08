@@ -99,7 +99,7 @@ def extract_article_text(url):
         print(f"Error extracting article text from {url}: {str(e)}")
         return ""
 # Function to crawl RSS feeds and collect articles
-def crawl_rss_feeds(min_articles_per_category=50, max_articles_per_category=60):
+def crawl_rss_feeds(min_articles_per_category=50, max_articles_per_category=500):
     print("Starting RSS feed crawling...")
 
     data = {
