@@ -11,6 +11,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 import matplotlib.pyplot as plt
 import seaborn as sns
+import pickle
 
 nltk.download('punkt', quiet=True)
 nltk.download('stopwords', quiet=True)
@@ -36,6 +37,49 @@ def preprocess_text(text):
     tokens = [lemmatizer.lemmatize(word) for word in tokens]
 
     return ' '.join(tokens)
+
+# Function to train and save models
+def train_and_save_models(csv_path):
+    df = load_dataset(csv_path)
+    df['processed_text'] = df['text'].apply(preprocess_text)
+    X_train, X_test, y_train, y_test = train_test_split(
+        df['processed_text'], df['category'], test_size=0.2, random_state=42
+    )
+
+    vectorizer = TfidfVectorizer(max_features=5000)
+    X_train_tfidf = vectorizer.fit_transform(X_train)
+    X_test_tfidf = vectorizer.transform(X_test)
+
+    nb_model = MultinomialNB()
+    nb_model.fit(X_train_tfidf, y_train)
+
+    lr_model = LogisticRegression(max_iter=1000, random_state=42)
+    lr_model.fit(X_train_tfidf, y_train)
+
+    #Save the models and vectorizer
+    with open('models/vectorizer.pkl', 'wb') as vec_file:
+        pickle.dump(vectorizer, vec_file)
+    
+    with open('models/nb_model.pkl', 'wb') as nb_file:
+        pickle.dump(nb_model, nb_file)
+
+    with open('models/lr_model.pkl', 'wb') as lr_file:
+        pickle.dump(lr_model, lr_file)
+
+    print("Models and vectorizer saved to disk.")
+
+# Function to load the models and vectorizer
+def load_models():
+    with open('models/vectorizer.pkl', 'rb') as vec_file:
+        vectorizer = pickle.load(vec_file)
+
+    with open('models/nb_model.pkl', 'rb') as nb_file:
+        nb_model = pickle.load(nb_file)
+
+    with open('models/lr_model.pkl', 'rb') as lr_file:
+        lr_model = pickle.load(lr_file)
+
+    return vectorizer, nb_model, lr_model
 
 # Function to train and evaluate classification models
 def train_models(df):
@@ -128,7 +172,9 @@ def main(csv_path=None):
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
+        train_and_save_models(sys.argv[1])
         main(sys.argv[1])
+
 
     else:
         print("Please provide a path to the CSV dataset file: python document_classifier.py path/to/dataset.csv")

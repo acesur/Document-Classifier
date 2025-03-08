@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Prediction Results</title>
+    </head>
+    <body>
+        <h1>Predictio Results</h1>
+        <h2>Naive Bayes Model Prediction</h2>
+        <p>Prediction: {{ nb_prediction }}</p>
+        <h3>Confidence Scores</h3>
+        <ul>
+            {% for category, prob in nb_prob_dict.items() %}
+                <li>{{ category }}: {{ prob * 100 }}%</li>
+            {% endfor %}
+        </ul>
+
+        <h2>Logistic Regression Model Prediction</h2>
+        <p>Prediction: {{ lr_prediction }}</p>
+        <h3>Confidence Scores</h3>
+        <ul>
+            {% for category, prob in lr_prob_dict.items() %}
+                <li>{{ category }}: {{ prob * 100 }}%</li>
+            {% endfor %}
+        </ul>
+
+        <br><br>
+        <a href="/">Try Another Document</a>
+    </body>
+</html>
