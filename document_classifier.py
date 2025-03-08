@@ -4,14 +4,17 @@ import re
 import nltk
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
+from imblearn.over_sampling import SMOTE
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pickle
+from sklearn.model_selection import GridSearchCV
 
 nltk.download('punkt', quiet=True)
 nltk.download('stopwords', quiet=True)
@@ -26,8 +29,8 @@ def load_dataset(csv_path):
 
 def preprocess_text(text):
     text = str(text).lower()
-    text = re.sub(r'[^\\w\\s]', '', text)
-    text = re.sub(r'\\d+', '', text)
+    text = re.sub(r'[^a-zA-Z\s]', '', text)
+    # text = re.sub(r'\\d+', '', text)
 
     tokens = nltk.word_tokenize(text)
     stop_words = set(stopwords.words('english'))
@@ -46,15 +49,22 @@ def train_and_save_models(csv_path):
         df['processed_text'], df['category'], test_size=0.2, random_state=42
     )
 
-    vectorizer = TfidfVectorizer(max_features=5000)
+    vectorizer = TfidfVectorizer(max_features=5000, ngram_range=(1,2), sublinear_tf=True)
     X_train_tfidf = vectorizer.fit_transform(X_train)
     X_test_tfidf = vectorizer.transform(X_test)
 
+    smote = SMOTE(random_state=42)
+    # X_train_tfidf, y_train = smote.fit_resample(X_train_tfidf, y_train)
+    X_train_smote, y_train_smote = smote.fit_resample(X_train_tfidf, y_train)
+
     nb_model = MultinomialNB()
-    nb_model.fit(X_train_tfidf, y_train)
+    nb_model.fit(X_train_smote, y_train_smote)
 
     lr_model = LogisticRegression(max_iter=1000, random_state=42)
-    lr_model.fit(X_train_tfidf, y_train)
+    lr_model.fit(X_train_smote, y_train_smote)
+
+    rf_model = RandomForestClassifier(n_estimators = 100, random_state=42)
+    rf_model.fit(X_train_smote, y_train_smote)
 
     #Save the models and vectorizer
     with open('models/vectorizer.pkl', 'wb') as vec_file:
@@ -65,6 +75,9 @@ def train_and_save_models(csv_path):
 
     with open('models/lr_model.pkl', 'wb') as lr_file:
         pickle.dump(lr_model, lr_file)
+    
+    with open('models/rf_model.pkl', 'wb') as rf_file:
+        pickle.dump(rf_model, rf_file)
 
     print("Models and vectorizer saved to disk.")
 
@@ -79,7 +92,10 @@ def load_models():
     with open('models/lr_model.pkl', 'rb') as lr_file:
         lr_model = pickle.load(lr_file)
 
-    return vectorizer, nb_model, lr_model
+    with open('models/rf_model.pkl', 'rb') as rf_file:
+        rf_model = pickle.load(rf_file)
+
+    return vectorizer, nb_model, lr_model, rf_model
 
 # Function to train and evaluate classification models
 def train_models(df):
@@ -128,18 +144,22 @@ def train_models(df):
     return vectorizer, (nb_model if accuracy_score(y_test, nb_predictions) > accuracy_score(y_test, lr_predictions) else lr_model)
 
 # Function to classify new text
-def classify_text(text, vectorizer, model):
+def classify_text(text, vectorizer, models):
     processed_text = preprocess_text(text)
     text_tfidf = vectorizer.transform([processed_text])
-    prediction = model.predict(text_tfidf)[0]
-    probabilities = model.predict_proba(text_tfidf)[0]
-    categories = model.classes_
-    prob_dict = {categories[i]: probabilities[i] for i in range(len(categories))}
+    predictions = {model_name: model.predict(text_tfidf)[0] for model_name, model in models.items()}
+    probabilities = {model_name: model.predict_proba(text_tfidf)[0] for model_name, model in models.items()}
 
-    return prediction, prob_dict
+    prob_dict ={}
+    for model_name, prob_array in probabilities.items():
 
+        classes = models[model_name].classes_
+ #   probabilities = model.predict_proba(text_tfidf)[0]
+ #   categories = model.classes_
+    prob_dict[model_name] = {classes[i]: prob_array[i] for i in range(len(classes))}
+    return predictions, prob_dict
 #Interactive classifier function
-def interactive_classifier(vectorizer, model):
+def interactive_classifier(vectorizer, models):
     print("\nInteractive Classifier: Type 'quit' to exit.")
 
     while True:
@@ -148,31 +168,43 @@ def interactive_classifier(vectorizer, model):
             print("Exiting interactive classifier.")
             break
 
-        prediction, probabilities = classify_text(text, vectorizer, model)
-        print(f"Prediction: {prediction}")
+        #prediction, probabilities = classify_text(text, vectorizer, model)
+        predictions,prob_dict = classify_text(text, vectorizer, models)
+        print(f"Prediction: {predictions}")
+        for model, prediction in predictions.items():
+            print(f"{model}: {prediction}")
+        print("-" * 50)
         print("Confidence Scores:")
-        for category, probability in sorted(probabilities.items(), key=lambda x: x[1], reverse=True):
-            print(f"{category}:{probability:.4f} ({probability * 100:.2f}%)")
+        for model, category_probabilities in prob_dict.items():
+            for category, prob in sorted(category_probabilities.items(), key=lambda x:x[1], reverse=True):
+                print(f"{category}: {prob:4f} ({prob * 100:.2f}%)")
+
+        # for category, probability in sorted(probabilities.items(), key=lambda x: x[1], reverse=True):
+        #     print(f"{category}:{probability:.4f} ({probability * 100:.2f}%)")
 
         print("-" * 50)
 
 # Main function
 def main(csv_path=None):
     if csv_path:
-        df = load_dataset(csv_path)
-    else:
-        print("No datset provided. Please provide a CSV path.")
-        return
-    
-    vectorizer, model = train_models(df)
+        train_and_save_models(csv_path)
+        vectorizer, nb_model, lr_model, rf_model = load_models()
+        models = {
+            "Naive Bayes": nb_model,
+            "Logistic Regression": lr_model,
+            "Random Forest": rf_model
+        }
 
     #Start interactive classifier
-    interactive_classifier(vectorizer, model)
+        interactive_classifier(vectorizer, models)
+    else:
+        print("No datset provided. Please provide a CSV path.")
+    return
 
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
-        train_and_save_models(sys.argv[1])
+        # train_and_save_models(sys.argv[1])
         main(sys.argv[1])
 
 
