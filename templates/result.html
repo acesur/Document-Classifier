@@ -10,39 +10,24 @@
             .container { max-width: 700; }
             .card { border-radius: 15px; }
             .btn-primary { font-size: 1.2rem; padding: 10px 20px;}
-
         </style>
     </head>
     <body>
         <div class="container mt-5">
             <div class="card shadow-lg p-4">
-
-        <h1 class="text-center text-success">Prediction Results</h1>
-        <h2 class="mt-4 text-primary">Naive Bayes Model Prediction</h2>
-        <p><strong>Prediction:</strong> {{ nb_prediction }}</p>
-        <h3 class="text-muted">Confidence Scores</h3>
-        <ul class="list-group mb-4">
-            {% for category, prob in nb_prob_dict.items() %}
-                <li class="list-group-item">{{ category }}:<strong>{{ prob * 100 }}%</strong></li>
-            {% endfor %}
-        </ul>
-
-        <h2 class="mt-4 text-danger">Logistic Regression Model Prediction</h2>
-        <p><strong>Prediction:</strong> {{ lr_prediction }}</p>
-        <h3 class="text-muted">Confidence Scores</h3>
-        <ul class="list-group mb-4">
-            {% for category, prob in lr_prob_dict.items() %}
-                <li class="list-group-item">{{ category }}:<strong>{{ prob * 100 }}%</strong></li>
-            {% endfor %}
-        </ul>
-        <h2 class="mt-4 text-danger">Random Forest Model Prediction</h2>
-        <p><strong>Prediction:</strong> {{ rf_prediction }}</p>
-        <h3 class="text-muted">Confidence Scores</h3>
-        <ul class="list-group mb-4">
-            {% for category, prob in rf_prob_dict.items() %}
-                <li class="list-group-item">{{ category }}:<strong>{{ prob * 100 }}%</strong></li>
-            {% endfor %}
-        </ul>
+                <h1 class="text-center text-success">Prediction Results</h1>
+                {% for model, data in sorted_models %}
+                    <h2 class="mt-4 {% if model == 'Naive Bayes' %} text-primary {% else %} text-danger {% endif %}">
+                        {{ model }} Model Prediction
+                    </h2>
+                    <p><strong>Prediction:</strong> {{ data.prediction }}</p>
+                    <h3 class="text-muted">Confidence Scores:</h3>
+                    <ul class="list-group mb-4">
+                        {% for category, prob in data.scores.items() %}
+                            <li class="list-group-item">{{ category }}: <strong>{{ "%.2f"|format(prob * 100) }}%</strong></li>
+                        {% endfor %}
+                    </ul>
+                {% endfor %}
         <div class="text-center">
             <a href="/" class="btn btn-primary">Try Another Document</a>
         </div>
